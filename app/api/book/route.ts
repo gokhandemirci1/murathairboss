@@ -80,13 +80,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Combine date and time into a single datetime (Turkey timezone - Europe/Istanbul)
-    // Parse date and time as local Turkey time
+    // Use explicit UTC+3 offset to avoid day-shift issues
     const [year, month, day] = body.date.split('-').map(Number)
     const [hours, minutes] = body.time.split(':').map(Number)
+    const tzOffset = '+03:00'
     
-    // Create date string in Turkey timezone format (YYYY-MM-DDTHH:mm:ss)
-    // Google Calendar API will use the timeZone field to interpret this correctly
-    const startDateTimeISO = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`
+    // Create date string in Turkey timezone format (YYYY-MM-DDTHH:mm:ss+03:00)
+    const startDateTimeISO = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00${tzOffset}`
     
     // Calculate end time (1 hour later) - handle day overflow
     let endHours = hours + 1
@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    const endDateTimeISO = `${endYear}-${String(endMonth).padStart(2, '0')}-${String(endDay).padStart(2, '0')}T${String(endHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`
+    const endDateTimeISO = `${endYear}-${String(endMonth).padStart(2, '0')}-${String(endDay).padStart(2, '0')}T${String(endHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00${tzOffset}`
 
     // Create event
     const event = {
@@ -122,12 +122,12 @@ export async function POST(request: NextRequest) {
         Saat: ${body.time}
       `,
       start: {
-        dateTime: startDateTimeISO, // Format: YYYY-MM-DDTHH:mm:ss (no timezone, API uses timeZone field)
-        timeZone: 'Europe/Istanbul', // API will interpret dateTime in this timezone
+        dateTime: startDateTimeISO, // Format: YYYY-MM-DDTHH:mm:ss+03:00
+        timeZone: 'Europe/Istanbul',
       },
       end: {
-        dateTime: endDateTimeISO, // Format: YYYY-MM-DDTHH:mm:ss (no timezone, API uses timeZone field)
-        timeZone: 'Europe/Istanbul', // API will interpret dateTime in this timezone
+        dateTime: endDateTimeISO, // Format: YYYY-MM-DDTHH:mm:ss+03:00
+        timeZone: 'Europe/Istanbul',
       },
       reminders: {
         useDefault: false,
@@ -145,16 +145,10 @@ export async function POST(request: NextRequest) {
       endDateTime: endDateTimeISO,
     })
 
-    // Query events for the selected time slot
-    // Convert Turkey time to UTC for query (Google Calendar API expects UTC)
-    // Turkey is UTC+3, so we subtract 3 hours
-    const [queryYear, queryMonth, queryDay] = body.date.split('-').map(Number)
-    const [queryHours, queryMinutes] = body.time.split(':').map(Number)
-    
-    // Create UTC dates for query (subtract 3 hours for Turkey timezone)
-    const queryStartUTC = new Date(Date.UTC(queryYear, queryMonth - 1, queryDay, queryHours - 3, queryMinutes, 0))
-    const queryEndUTC = new Date(Date.UTC(queryYear, queryMonth - 1, queryDay, queryHours - 2, queryMinutes, 0))
-    
+    // Query events for the selected time slot (API expects UTC range)
+    const queryStartUTC = new Date(`${body.date}T${body.time}:00${tzOffset}`)
+    const queryEndUTC = new Date(queryStartUTC.getTime() + 60 * 60 * 1000)
+
     const timeMin = queryStartUTC.toISOString()
     const timeMax = queryEndUTC.toISOString()
 
