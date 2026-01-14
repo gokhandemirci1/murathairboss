@@ -5,7 +5,7 @@ import { MapPin, Navigation } from 'lucide-react'
 
 export default function Location() {
   const address = "Ataşehir 8010/2. Sk. No:6/C 35630 Çiğli/İzmir"
-  const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
+  const googleMapsUrl = "https://www.google.com/maps/place/Murat+Hair+Boss+%C3%87i%C4%9Fli/@38.4907159,27.0619938,17z/data=!3m1!4b1!4m6!3m5!1s0x14bbd16737db8ce1:0x4975ad862c416e05!8m2!3d38.4907159!4d27.0619938!16s%2Fg%2F11yfd8g722?entry=ttu&g_ep=EgoyMDI2MDEwNy4wIKXMDSoASAFQAw%3D%3D"
 
   return (
     <section className="py-20 bg-black">

@@ -37,12 +37,16 @@ export default function BookingForm() {
     setSubmitStatus('idle')
 
     try {
-      // Convert date to YYYY-MM-DD format and time to HH:mm format
+      // Convert date to local YYYY-MM-DD and time to HH:mm format
       const formattedData = {
         firstName: data.firstName,
         lastName: data.lastName,
         phone: data.phone,
-        date: data.date ? data.date.toISOString().split('T')[0] : '',
+        date: data.date
+          ? `${data.date.getFullYear()}-${String(data.date.getMonth() + 1).padStart(2, '0')}-${String(
+              data.date.getDate()
+            ).padStart(2, '0')}`
+          : '',
         time: data.time ? data.time.toTimeString().slice(0, 5) : '',
       }
 
@@ -61,7 +65,16 @@ export default function BookingForm() {
         reset()
         setTimeout(() => setSubmitStatus('idle'), 5000)
       } else {
-        setSubmitStatus('error')
+        const errorData = await response.json()
+        if (response.status === 409) {
+          // Conflict - time slot already booked
+          setSubmitStatus('error')
+          // Show specific error message
+          const errorMessage = errorData.error || 'Bu saatte zaten bir randevu var'
+          alert(errorMessage + '. Lütfen başka bir saat seçiniz.')
+        } else {
+          setSubmitStatus('error')
+        }
         setTimeout(() => setSubmitStatus('idle'), 5000)
       }
     } catch (error) {

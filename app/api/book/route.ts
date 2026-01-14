@@ -79,9 +79,38 @@ export async function POST(request: NextRequest) {
       targetCalendarId = calendarId
     }
 
-    // Combine date and time into a single datetime
-    const startDateTime = new Date(`${body.date}T${body.time}`)
-    const endDateTime = new Date(startDateTime.getTime() + 60 * 60 * 1000) // Add 1 hour
+    // Combine date and time into a single datetime (Turkey timezone - Europe/Istanbul)
+    // Parse date and time as local Turkey time
+    const [year, month, day] = body.date.split('-').map(Number)
+    const [hours, minutes] = body.time.split(':').map(Number)
+    
+    // Create date string in Turkey timezone format (YYYY-MM-DDTHH:mm:ss)
+    // Google Calendar API will use the timeZone field to interpret this correctly
+    const startDateTimeISO = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`
+    
+    // Calculate end time (1 hour later) - handle day overflow
+    let endHours = hours + 1
+    let endYear = year
+    let endMonth = month
+    let endDay = day
+    
+    if (endHours >= 24) {
+      endHours = endHours % 24
+      // Add one day manually to avoid timezone conversion issues
+      const daysInMonth = new Date(year, month, 0).getDate() // Get days in current month
+      if (day < daysInMonth) {
+        endDay = day + 1
+      } else if (month < 12) {
+        endDay = 1
+        endMonth = month + 1
+      } else {
+        endDay = 1
+        endMonth = 1
+        endYear = year + 1
+      }
+    }
+    
+    const endDateTimeISO = `${endYear}-${String(endMonth).padStart(2, '0')}-${String(endDay).padStart(2, '0')}T${String(endHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`
 
     // Create event
     const event = {
@@ -93,12 +122,12 @@ export async function POST(request: NextRequest) {
         Saat: ${body.time}
       `,
       start: {
-        dateTime: startDateTime.toISOString(),
-        timeZone: 'Europe/Istanbul',
+        dateTime: startDateTimeISO, // Format: YYYY-MM-DDTHH:mm:ss (no timezone, API uses timeZone field)
+        timeZone: 'Europe/Istanbul', // API will interpret dateTime in this timezone
       },
       end: {
-        dateTime: endDateTime.toISOString(),
-        timeZone: 'Europe/Istanbul',
+        dateTime: endDateTimeISO, // Format: YYYY-MM-DDTHH:mm:ss (no timezone, API uses timeZone field)
+        timeZone: 'Europe/Istanbul', // API will interpret dateTime in this timezone
       },
       reminders: {
         useDefault: false,
@@ -109,11 +138,69 @@ export async function POST(request: NextRequest) {
       },
     }
 
+    // Check if there's already an event at this time
+    console.log('Checking for existing events at this time:', {
+      calendarId: targetCalendarId,
+      startDateTime: startDateTimeISO,
+      endDateTime: endDateTimeISO,
+    })
+
+    // Query events for the selected time slot
+    // Convert Turkey time to UTC for query (Google Calendar API expects UTC)
+    // Turkey is UTC+3, so we subtract 3 hours
+    const [queryYear, queryMonth, queryDay] = body.date.split('-').map(Number)
+    const [queryHours, queryMinutes] = body.time.split(':').map(Number)
+    
+    // Create UTC dates for query (subtract 3 hours for Turkey timezone)
+    const queryStartUTC = new Date(Date.UTC(queryYear, queryMonth - 1, queryDay, queryHours - 3, queryMinutes, 0))
+    const queryEndUTC = new Date(Date.UTC(queryYear, queryMonth - 1, queryDay, queryHours - 2, queryMinutes, 0))
+    
+    const timeMin = queryStartUTC.toISOString()
+    const timeMax = queryEndUTC.toISOString()
+
+    let existingEvents
+    try {
+      const eventsResponse = await calendar.events.list({
+        calendarId: targetCalendarId,
+        timeMin: timeMin,
+        timeMax: timeMax,
+        singleEvents: true,
+        orderBy: 'startTime',
+        maxResults: 10,
+      })
+
+      existingEvents = eventsResponse.data.items || []
+      console.log('Found existing events:', existingEvents.length)
+
+      // Check if there are any events that overlap with our time slot
+      if (existingEvents.length > 0) {
+        console.log('Time slot is already booked:', existingEvents.map(e => ({
+          summary: e.summary,
+          start: e.start?.dateTime,
+          end: e.end?.dateTime,
+        })))
+
+        return NextResponse.json(
+          {
+            error: 'Bu saatte zaten bir randevu var',
+            details: 'Lütfen başka bir saat seçiniz',
+            availableSlots: 'Farklı bir saat deneyiniz',
+          },
+          { status: 409 } // Conflict status code
+        )
+      }
+    } catch (listError: any) {
+      console.error('Error checking existing events:', listError)
+      // If we can't check, we'll still try to create the event
+      // Google Calendar will prevent double booking if configured
+    }
+
     // Insert event into calendar
     console.log('Attempting to create calendar event:', {
       calendarId: targetCalendarId,
-      startDateTime: startDateTime.toISOString(),
-      endDateTime: endDateTime.toISOString(),
+      startDateTime: startDateTimeISO,
+      endDateTime: endDateTimeISO,
+      localTime: `${body.date} ${body.time} (Turkey time - Europe/Istanbul)`,
     })
 
     // Try to insert event
