@@ -58,7 +58,13 @@ export default function BookingForm() {
         body: JSON.stringify(formattedData),
       })
 
-      const result = await response.json()
+      let result: { error?: string } | null = null
+      try {
+        const responseText = await response.text()
+        result = responseText ? (JSON.parse(responseText) as { error?: string }) : null
+      } catch {
+        result = null
+      }
 
       if (response.ok) {
         setSubmitStatus('success')
