@@ -65,12 +65,11 @@ export default function BookingForm() {
         reset()
         setTimeout(() => setSubmitStatus('idle'), 5000)
       } else {
-        const errorData = await response.json()
         if (response.status === 409) {
           // Conflict - time slot already booked
           setSubmitStatus('error')
           // Show specific error message
-          const errorMessage = errorData.error || 'Bu saatte zaten bir randevu var'
+          const errorMessage = result?.error || 'Bu saatte zaten bir randevu var'
           alert(errorMessage + '. Lütfen başka bir saat seçiniz.')
         } else {
           setSubmitStatus('error')
