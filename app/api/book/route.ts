@@ -88,8 +88,10 @@ export async function POST(request: NextRequest) {
     // Create date string in Turkey timezone format (YYYY-MM-DDTHH:mm:ss+03:00)
     const startDateTimeISO = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00${tzOffset}`
     
-    // Calculate end time (1 hour later) - handle day overflow
-    let endHours = hours + 1
+    // Calculate end time (30 minutes later) - handle minute/hour/day overflow
+    const totalMinutes = minutes + 30
+    let endHours = hours + Math.floor(totalMinutes / 60)
+    let endMinutes = totalMinutes % 60
     let endYear = year
     let endMonth = month
     let endDay = day
@@ -110,7 +112,7 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    const endDateTimeISO = `${endYear}-${String(endMonth).padStart(2, '0')}-${String(endDay).padStart(2, '0')}T${String(endHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00${tzOffset}`
+    const endDateTimeISO = `${endYear}-${String(endMonth).padStart(2, '0')}-${String(endDay).padStart(2, '0')}T${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}:00${tzOffset}`
 
     // Create event
     const event = {
@@ -147,7 +149,7 @@ export async function POST(request: NextRequest) {
 
     // Query events for the selected time slot (API expects UTC range)
     const queryStartUTC = new Date(`${body.date}T${body.time}:00${tzOffset}`)
-    const queryEndUTC = new Date(queryStartUTC.getTime() + 60 * 60 * 1000)
+    const queryEndUTC = new Date(queryStartUTC.getTime() + 30 * 60 * 1000)
 
     const timeMin = queryStartUTC.toISOString()
     const timeMax = queryEndUTC.toISOString()
